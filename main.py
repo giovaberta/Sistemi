@@ -1,16 +1,13 @@
-import time
 import tornado, asyncio, json
+from bson import ObjectId
 from pymongo import AsyncMongoClient
-
-
-
 
 client  = AsyncMongoClient("localhost",27017)
 db = client["publisher_db"]
 publishers = db["publishers"]
 books = db["books"]
 
-
+#Funzioni per l'inserimento dei libri su mongo
 async def insert_book():
    await books.insert_many([
            {
@@ -112,8 +109,6 @@ async def insert_book():
                "publisher_id": "OBJECT_ID_FELTRINELLI"
            }
        ])
-
-
 async def insert_publishers():
    await publishers.insert_many([
        {
@@ -143,26 +138,91 @@ async def insert_publishers():
        }
    ])
 
+async def printAll():
+    dict = {}
+    publisher = publishers.find()
+    cont = 0
+    async for pb in publisher:
+        print(pb)
+        pb["_id"] = str(pb["_id"])
+        cont = cont + 1
+        dict[cont] = pb
+    return dict
+
+async def printAllBook():
+    dict = {}
+    book = books.find()
+    cont = 0
+    async for pb in book:
+        print(pb)
+        pb["_id"] = str(pb["_id"])
+        cont = cont + 1
+        dict[cont] = pb
+    return dict
 
 class PublishersHandler(tornado.web.RequestHandler):
-   async def get(self, pb_id = None):
-       if not pb_id:
-           dict = {}
-           publisher = publishers.find()
-           cont = 0
-           async for pb in publisher:
-               print(pb)
-               pb["_id"] = str(pb["_id"])
-               cont = cont + 1
-               dict[cont]=pb
-           self.write(dict)
-       else:
-           publisher = await publishers.find_one({"_id":pb_id})
+    async def get(self, pb_id = None):
+        if not pb_id:
+            dizz = await printAll()
+            self.set_status(201)
+            self.write(dizz)
+        else:
+            publisher = await publishers.find_one({"_id":ObjectId(pb_id)})
+            if not publisher:
+                self.set_status(404)
+                self.write("Error database")
+            else:
+                publisher["_id"] = str(publisher["_id"])
+                self.set_status(201)
+                self.write(publisher)
+
+    async def post(self):
+        self.set_header("Content-Type", "application/json")
+        data = tornado.escape.json_decode(self.request.body)
+        ris = await publishers.insert_one(data)
+        dizz = await printAll()
+        self.set_status(201)
+        self.write(dizz)
+
+    async def put(self, pb_id):
+        self.set_header("Content-Type", "application/json")
+        data = tornado.escape.json_decode(self.request.body)
+        publisher = await publishers.find_one({"_id":ObjectId(pb_id)})
+        await publishers.update_one({"_id": ObjectId(pb_id)}, { "$set" :data})
+        self.set_status(203)
+
+    async def delete(self, pb_id):
+        ris = await publishers.delete_one({"_id":ObjectId(pb_id)})
+        if ris["n"] == 1:
+            self.set_status(203)
+            self.write("Elimiato con sucesso")
+        else:
+            self.set_status(404)
+            self.write("Error")
+
+class BooksHandler(tornado.web.RequestHandler):
+    async def get(self, pb_id, bo_id = None):
+        print(pb_id)
+        if not pb_id:
+            dizz = await printAllBook()
+            self.set_status(201)
+            self.write(dizz)
+        else:
+            book = await books.find_one({"_id": ObjectId(pb_id)})
+            if not book:
+                self.set_status(404)
+                self.write("Error database")
+            else:
+                book["_id"] = str(book["_id"])
+                self.set_status(201)
+                self.write(book)
 
 def make_app():
   return tornado.web.Application([
       (r"/publishers",PublishersHandler),
-      (r"/publishers/(.+)",PublishersHandler)
+      (r"/publishers/([a-f0-9]+)",PublishersHandler),
+      (r"/publishers/([a-f0-9]+)/books",BooksHandler),
+      (r"/publishers/([a-f0-9]+)/books/([a-f0-9]+)",BooksHandler),
 
   ])
 async def main(shutdown_event):
