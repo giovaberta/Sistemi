@@ -286,7 +286,7 @@ class BooksHandler(tornado.web.RequestHandler):
             self.write("Id book errato")
             return
         #Aggiorno il libro nel database
-        await books.update_one({"_id":ObjectId(bo_id)},{"&set":data})
+        await books.update_one({"_id":ObjectId(bo_id)},{"$set":data})
         self.set_status(203)
 
     async def delete(self,pb_id,bo_id):
